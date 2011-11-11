@@ -3,7 +3,7 @@
 
 = FAQ=
 
-== What is the difference between static and instance method? ==
+== 1. What is the difference between static and instance method? ==
    Instance methods can be called by the object of a Class whereas static method are called by the Class.
 
  When objects of a Class are created, they have their own copy of instance methods and variables, stored in different memory locations.
@@ -16,3 +16,9 @@
     Calc calulator= new Calc();
     calciulator.add(4,55);
 }}}
+
+== 2. why is main method static and public ==
+
+== 3. When should we use static methods and instance method ==
+
+== 4. what is an instance? ==
