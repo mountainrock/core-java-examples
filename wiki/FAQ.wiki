@@ -1,0 +1,16 @@
+#summary One-sentence summary of this page.
+#labels corejavafaq
+
+= FAQ=
+
+== What is the difference between static and instance method? ==
+   Instance methods can be called by the object of a Class whereas static method are called by the Class.
+
+ When objects of a Class are created, they have their own copy of instance methods and variables, stored in different memory locations.
+
+ Static Methods and variables are shared among all the objects of the Class, stored in one fixed location in memory.Static methods cannot access instance variables or instance methods directly-they must use an object reference. Also, class methods cannot use the this keyword as there is no instance for this to refer to.
+
+Calc class method add is instance method
+
+Calc calulator= new Calc();
+calciulator.add(4,55);
