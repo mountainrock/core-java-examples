@@ -10,7 +10,9 @@
 
  Static Methods and variables are shared among all the objects of the Class, stored in one fixed location in memory.Static methods cannot access instance variables or instance methods directly-they must use an object reference. Also, class methods cannot use the this keyword as there is no instance for this to refer to.
 
-Calc class method add is instance method
+{{{
+    Calc class method add is instance method
 
-Calc calulator= new Calc();
-calciulator.add(4,55);
+    Calc calulator= new Calc();
+    calciulator.add(4,55);
+}}}
