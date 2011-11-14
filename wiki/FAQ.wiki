@@ -22,3 +22,7 @@
 == 3. When should we use static methods and instance method ==
 
 == 4. what is an instance? ==
+
+
+== 5. difference b/n class and object ==
+== 6. Give an example of using OOP principles used in a bank. Eg: A user has a savings and current account in the bank. How do you model this in java. Hint: Try to think of encapsulation, inheritence here. ==
