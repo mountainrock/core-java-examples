@@ -26,3 +26,9 @@
 
 == 5. difference b/n class and object ==
 == 6. Give an example of using OOP principles used in a bank. Eg: A user has a savings and current account in the bank. How do you model this in java. Hint: Try to think of encapsulation, inheritence here. ==
+
+== Collections ==
+http://www.allapplabs.com/interview_questions/java_collection_interview_questions.htm 
+http://www.techinterviews.com/master-list-of-java-interview-questions 
+
+http://www.javapractices.com/topic/TopicAction.do;jsessionid=0B2FC0D84B0F9435FEF7762D0A58D6C8?Id=65 
