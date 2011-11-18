@@ -29,6 +29,7 @@
 
 == 7. Collections ==
 [http://www.allapplabs.com/interview_questions/java_collection_interview_questions.htm Interview questions]
+
 [http://www.techinterviews.com/master-list-of-java-interview-questions master list]
 
 [http://www.javapractices.com/topic/TopicAction.do;jsessionid=0B2FC0D84B0F9435FEF7762D0A58D6C8?Id=65 what collections to use]
