@@ -10,7 +10,7 @@ public class OutlookUtil {
 	public static void main(final String[] args) throws Exception {
 
 		//Desktop.getDesktop().mail(new URI("mailto:address@somewhere.com"));
-		createNewEmail("sandeep.maloth@jpmcahse.com&subject=test subject&body=test%20body");
+		createNewEmail("sandeep@j.com&subject=test subject&body=test%20body");
 
 	}
 
