@@ -1,4 +1,4 @@
-package coacs.tools.junit;
+package tools.junit;
 
 import java.lang.reflect.Field;
 
