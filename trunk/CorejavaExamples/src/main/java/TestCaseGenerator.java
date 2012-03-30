@@ -1,4 +1,4 @@
-package project.tools.junit;
+package tools.junit;
 
 import japa.parser.ast.BlockComment;
 import japa.parser.ast.CompilationUnit;
@@ -107,19 +107,22 @@ public class TestCaseGenerator {
 
 	Map<String, String> memberVariables = new HashMap<String, String>();
 
-	StringBuilder testMethod;
+	StringBuilder testMethodGiven, testMethodReplay, testMethodWhen, testMethodThen;
 	StringBuilder testClass = null;
-	Map<String, String> testCases = new LinkedHashMap<String, String>();
+	Map<String, Map<String, String>> testCases = new LinkedHashMap<String, Map<String, String>>();
 
 	public static final String NL = "\r\n";
 
-	public static final String srcDir = "C:/svn/im-project-mo/mo-project/branches/mo-project-1.0/mo-project-client/src/main/java/com/jpmc/am/mo/project/web/server/rpc";//"src/test/resources";
-	public static final String destnDir = "src/test/resources/temp";
+	public static final String srcDir = "C:/svn/im-emea-mo/mo-coacs/branches/mo-coacs-1.0/mo-coacs-client/src/main/java/com/jpmc/am/mo/coacs/web/server/rpc";// "src/test/resources";
+	public static final String destnDir = "c:/temp/src/test/resources/temp";
+	private static String javaSrcFile = "C:/svn/im-emea-mo/mo-coacs/branches/mo-coacs-1.0/mo-coacs-data-access/src/main/java/com/jpmc/am/mo/coacs/service/client/impl/FoInvestorServiceImpl.java";
 
 	public static void main(final String[] args) throws Exception {
-		new TestCaseGenerator().generateTestCases();
+		final TestCaseGenerator testCaseGenerator = new TestCaseGenerator();
+		// testCaseGenerator.generateTestCases();
+		testCaseGenerator.visitAClassAtPath(javaSrcFile);
 	}
-	
+
 	public void generateTestCases() throws Exception {
 		final File srcDirObj = new File(srcDir);
 		final File destnDirObj = new File(destnDir);
@@ -140,15 +143,22 @@ public class TestCaseGenerator {
 		// time to do it
 		for (final File javaSrcFile : javaSrcFiles) {
 			logi("Processing : " + javaSrcFile);
-			testClass = new StringBuilder(); 
-			testCases.clear();
 			visitAClass(javaSrcFile);
 		}
 	}
 
-	public void visitAClass(final File classFile) throws Exception {
+	public void visitAClassAtPath(final String classFilePath) throws Exception {
+		visitAClass(new File(classFilePath));
+	}
 
+	public void visitAClass(final File classFile) throws Exception {
 		final String source = Helper.readFile(classFile);
+		visitAClassSource(source);
+	}
+
+	public String visitAClassSource(final String source) throws Exception {
+		testClass = new StringBuilder();
+		testCases.clear();
 		final CompilationUnit cu = Helper.parserString(source);
 		cu.accept(new TestVisitor(source), null);
 
@@ -156,23 +166,34 @@ public class TestCaseGenerator {
 		final String classToTest = cu.getTypes().get(0).getName();
 		testClass.append(getImports());
 		testClass.append("public class ").append(classToTest + "Test{" + NL);
-		final String testInstance = StringUtils.uncapitalise(classToTest);
+		final String testInstance = StringUtils.uncapitalise(classToTest).replace("Impl", "");
 		testClass.append(NL + TAB + classToTest + " " + testInstance + ";" + NL);
 		// dump generated methods
-		for (final Iterator<Map.Entry<String, String>> it = testCases.entrySet().iterator(); it.hasNext();) {
-			final Map.Entry<String, String> entry = it.next();
+		for (final Iterator<Map.Entry<String, Map<String, String>>> it = testCases.entrySet().iterator(); it.hasNext();) {
+			final Map.Entry<String, Map<String, String>> entry = it.next();
 			final String key = entry.getKey();
-			final String value = entry.getValue();
-			if (StringUtils.isEmpty(value)) {
+			final Map<String, String> codeBlocks = testCases.get(key);
+			final String given = codeBlocks.get("Given");
+			final String replay = codeBlocks.get("Replay");
+			final String when = codeBlocks.get("When");
+			final String then = codeBlocks.get("Then");
+			String replayStr = "";
+
+			if (replay.length() > 0) {
+				replayStr = TAB + String.format("EasyMock.replay(%s);", replay.substring(0, replay.lastIndexOf(","))) + NL;
+			}
+			if (StringUtils.isEmpty(given)) {
 				continue;
 			}
-			testClass.append(NL+"@Test"+NL).append("public void test" + StringUtils.capitalise(key).substring(0, key.lastIndexOf("(")) + "(){" + NL).append(TAB + "//given" + NL).append(value).append(NL + TAB + "//when" + NL)
-					.append(NL + TAB + "//" + testInstance + "." + key + ";" + NL).append(NL + TAB + "//then" + NL + NL).append("}");
+			testClass.append(NL + "@Test" + NL).append("public void test" + StringUtils.capitalise(key).substring(0, key.lastIndexOf("(")) + "(){" + NL).append(TAB + "//given" + NL).append(given).append(replayStr)
+					.append(NL + TAB + "//when" + NL).append(when).append(NL + TAB + "" + testInstance + "." + key + ";" + NL).append(NL + TAB + "//then" + NL + NL).append(then).append("}");
 		}
 		// done
 		testClass.append(NL + "}");
-		logi("Result" + NL+ testClass.toString());
-		FileUtils.writeStringToFile(new File(destnDir + "/" + classToTest + "Test.java"), testClass.toString());
+		logi("Result" + NL + testClass.toString());
+		final String result = testClass.toString();
+		FileUtils.writeStringToFile(new File(destnDir + "/" + classToTest + "Test.java"), result);
+		return result;
 	}
 
 	private String getImports() {
@@ -198,18 +219,32 @@ public class TestCaseGenerator {
 			final MethodDeclaration codeBlock = (MethodDeclaration) node;
 			logi(getMethodName(codeBlock));
 			final BlockStmt methodBody = codeBlock.getBody();
-			testMethod = new StringBuilder();
-			generateTestCaseForMethod(getMethodName(codeBlock), methodBody, TAB);
-			testCases.put(getMethodName(codeBlock), testMethod.toString());
+			testMethodGiven = new StringBuilder();
+			testMethodWhen = new StringBuilder();
+			testMethodThen = new StringBuilder();
+			testMethodReplay = new StringBuilder();
+			try {
+				generateTestCaseForMethod(getMethodName(codeBlock), methodBody, TAB, methodBody);
+			} catch (final Exception e) {
+				e.printStackTrace();
+				// continue
+			}
+			final Map<String, String> codeBlocks = new HashMap<String, String>();
+			codeBlocks.put("Given", testMethodGiven.toString());
+			codeBlocks.put("When", testMethodWhen.toString());
+			codeBlocks.put("Then", testMethodThen.toString());
+			codeBlocks.put("Replay", testMethodReplay.toString());
+
+			testCases.put(getMethodName(codeBlock), codeBlocks);
+
 		}
 
 	}
 
 	private String getMethodName(final MethodDeclaration codeBlock) {
 		final List<Parameter> parameters = codeBlock.getParameters();
-		;
 		String params = "";
-		if (parameters !=null) {
+		if (parameters != null) {
 			for (final Parameter parameter : parameters) {
 				params = params + parameter.getId().toString() + ",";
 			}
@@ -219,8 +254,8 @@ public class TestCaseGenerator {
 		return codeBlock.getName() + "(" + params + ")";
 	}
 
-	public void generateTestCaseForMethod(final String methodName, final BlockStmt body, final String tab) {
-		final List<Statement> stmts = body!=null ? body.getStmts() : null;
+	public void generateTestCaseForMethod(final String methodName, final BlockStmt body, final String tab, final BlockStmt methodBody) {
+		final List<Statement> stmts = body != null ? body.getStmts() : null;
 		if (stmts == null || (methodName.matches("^(set).*") && memberVariables.containsKey(methodName.substring(methodName.indexOf("set"))))
 				|| (methodName.matches("^(get).*") && memberVariables.containsKey(methodName.substring(methodName.indexOf("get"))))) {// ignore
 																																		// setter
@@ -234,53 +269,113 @@ public class TestCaseGenerator {
 					final VariableDeclarationExpr variableDeclarationExpr = (VariableDeclarationExpr) expression;
 					final List<VariableDeclarator> vars = variableDeclarationExpr.getVars();
 					final VariableDeclarator variableDeclarator = vars.get(0);
+
+					String mockExpression = null;
 					final String classType = variableDeclarationExpr.getType().toString();
-					final String mockName = variableDeclarator.getId().toString();
+					final String mockVariableName = variableDeclarator.getId().toString();
 
-					String mockExpression;
-					if (classType.endsWith("Dto") || classType.matches("StringBuilder|StringBuffer")) {
-						mockExpression = " = new  " + classType + "();";
-					} else if (classType.matches("(final)+.*")) {
-						mockExpression="";
-					} else if (classType.matches("(List|ArrayList)+.*")) {
-						mockExpression = " = new  ArrayList();";
-					} else if (classType.matches("(Set|HashSet)+.*")) {
-						mockExpression = " = new  HashSet();";
-					} else if (classType.matches("(Map|HashMap)+.*")) {
-						mockExpression = " = new  HashMap();";
-					} else if ("String".equals(classType)) {
-						mockExpression = " = \"test" + StringUtils.capitalize(mockName) + "\";";
-					} else if ("Integer".equals(classType)) {
-						mockExpression = "= 1;";
-					} else if ("boolean".equals(classType)) {
-						mockExpression = "= false;";
+					final Expression initExpression = variableDeclarator.getInit();
+					final String initializer = initExpression != null ? initExpression.toString() : "";
+					if (StringUtils.isNotEmpty(initializer)) { // variable value
+						if (initializer.contains("new ")) { // new object
+							continue;
+							// mockExpression = initializer;
+						} else if (classType.matches("(String|\")")) {
+							mockExpression = "\"test-" + StringUtils.lowerCase(mockVariableName) + "\"";
+						} else if (initializer.contains(".")) {
+							// api call. mock the API call
+							if (initExpression instanceof MethodCallExpr) {
+								final MethodCallExpr methodCaller = (MethodCallExpr) initExpression;
+								final String methodInvokerObject = methodCaller.getScope().toString();
+								final String invokerMethodName = methodCaller.getName();
+								String initClassName = memberVariables.get(methodInvokerObject);
+								if (initClassName == null) {
+									initClassName = StringUtils.capitalise(methodInvokerObject);
+								}
+								mockExpression = "EasyMock.createMock(" + initClassName + ".class)";
+								testMethodGiven.append(tab + initClassName).append(" ").append(methodInvokerObject).append(" = ").append(mockExpression + ";\r\n");
+								// set expectation
+								final List<Expression> args = methodCaller.getArgs();
+								;
+								String mockArgs = "";
+								if (args != null) {
+									for (final Expression expression2 : args) {
+										if (expression2 instanceof NameExpr) {
+											final String param = guessParamClassType(expression2);
+											mockArgs += "EasyMock.isA(" + param + ".class),";
+										}
+									}
+									if (StringUtils.isNotBlank(mockArgs)) {
+										mockArgs = mockArgs.substring(0, mockArgs.length() - 1);
+										// TODO: set the return value
+										testMethodGiven.append(TAB + String.format("%s %s = new %s();", classType, mockVariableName, classType)).append(";" + NL);
+										testMethodGiven.append(TAB + String.format("EasyMock.expect(%s.%s(%s))", methodInvokerObject, invokerMethodName, mockArgs)).append(").andReturn(" + mockVariableName + ");" + NL);
+									}
+								} else {
+									testMethodGiven.append(TAB + String.format("%s.%s();", methodInvokerObject, invokerMethodName)).append(NL);
+								}
 
-					} else {
-						mockExpression = " = createMock(" + classType + ".class);";
+								testMethodReplay.append(methodInvokerObject).append(",");
+								continue;
+							}
+						} else if (classType.matches("(lont|short|int|bye|Long|Short|Integer|Byte)+.*")) {
+							mockExpression = "1";
+						} else if (classType.matches("(Double|Float|double|float)+.*")) {
+							mockExpression = "1.0";
+						} else if (classType.endsWith("Dto") || classType.matches("StringBuilder|StringBuffer")) {
+							mockExpression = " new  " + classType + "()";
+						} else if (classType.matches("(final)+.*")) {
+							mockExpression = "";
+						} else if (classType.matches("(List|ArrayList)+.*")) {
+							mockExpression = " new  ArrayList()";
+						} else if (classType.matches("(Set|HashSet)+.*")) {
+							mockExpression = " new  HashSet()";
+						} else if (classType.matches("(Map|HashMap)+.*")) {
+							mockExpression = " new  HashMap()";
+						} else if ("String".equals(classType)) {
+							mockExpression = " \"test" + StringUtils.capitalize(mockVariableName) + "\"";
+						} else if ("boolean".equals(classType)) {
+							mockExpression = " false";
+
+						} else {
+							mockExpression = " createMock(" + classType + ".class)";
+						}
 					}
-					testMethod.append(tab + classType).append(" ").append(mockName).append(mockExpression + "\r\n");
+
+					testMethodGiven.append(tab + classType).append(" ").append(mockVariableName).append(" = ").append(mockExpression + ";\r\n");
 				}
 				logi(tab + " ExpressionStmt : " + expression.getClass() + " " + expression);
 			} else if (statement instanceof TryStmt) {
 				final TryStmt tryBlock = (TryStmt) statement;
 				final BlockStmt tryBlockStmt = tryBlock.getTryBlock();
 				logi(tab + " TRY{");
-				generateTestCaseForMethod(methodName, tryBlockStmt, tab + TAB);
+				generateTestCaseForMethod(methodName, tryBlockStmt, tab + TAB, methodBody);
 				logi(tab + " /TRY }");
 			} else if (statement instanceof ForeachStmt) {
 				final ForeachStmt forEach = (ForeachStmt) statement;
 				logi(tab + " FOR{" + forEach.getVariable());
-				generateTestCaseForMethod(methodName, (BlockStmt) forEach.getBody(), tab + TAB);
+				generateTestCaseForMethod(methodName, (BlockStmt) forEach.getBody(), tab + TAB, methodBody);
 				logi(tab + " /FOR}");
 			} else if (statement instanceof WhileStmt) {
 				final WhileStmt whileStmt = (WhileStmt) statement;
 				logi(tab + " WHILE{" + whileStmt.getCondition());
-				generateTestCaseForMethod(methodName, (BlockStmt) whileStmt.getBody(), tab + TAB);
+				generateTestCaseForMethod(methodName, (BlockStmt) whileStmt.getBody(), tab + TAB, methodBody);
 				logi(tab + " /WHILE}");
 			} else {
 				logi(TAB + statement.getClass() + " : " + statement);
 			}
 		}
+
+	}
+
+	// TODO: set the type of the argument
+	public String guessParamClassType(final Expression expression2) {
+		final NameExpr nameExpr = (NameExpr) expression2;
+		String param = nameExpr.toString();
+		param = param.endsWith("Id") ? "Integer" : param;
+		param = param.endsWith("List") ? "List" : param;
+		param = param.endsWith("Map") ? "Map" : param;
+		return param;
 	}
 
 	class TestVisitor extends VoidVisitorAdapter<Object> {
