@@ -27,7 +27,7 @@ public class SuperWebDriver {
 		methodNameMap.put("sleep","sleep");
 	}
 	
-	/**
+	/** Run SuperWebDriver [FILE PATH]
 	 * <pre> Sample instructions
 	    ##
 		## Enter the instruction for browser to execute
