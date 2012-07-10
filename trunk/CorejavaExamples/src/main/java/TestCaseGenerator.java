@@ -98,7 +98,7 @@ import org.apache.commons.lang.StringUtils;
 /**
  * Uses javaparser (japa) to generate testcases with easy mock methods.
  * 
- * @author W353322
+ * @au
  * 
  */
 public class TestCaseGenerator {
@@ -117,9 +117,9 @@ public class TestCaseGenerator {
 
 	public static final String NL = "\r\n";
 
-	public static final String srcDir = "C:/svn/im-emea-mo/mo-coacs/branches/mo-coacs-1.0/mo-coacs-client/src/main/java/com/jpmc/am/mo/coacs/web/server/rpc";// "src/test/resources";
+	public static final String srcDir = "C:/svn/server/rpc";// "src/test/resources";
 	public static final String destnDir = "c:/temp/src/test/resources/temp";
-	private static String javaSrcFile = "C:/svn/im-emea-mo/mo-coacs/branches/mo-coacs-1.0/mo-coacs-data-access/src/main/java/com/jpmc/am/mo/coacs/service/client/impl/FoInvestorServiceImpl.java";
+	private static String javaSrcFile = "C:/svn/test.java";
 
 	public static void main(final String[] args) throws Exception {
 		final TestCaseGenerator testCaseGenerator = new TestCaseGenerator();
