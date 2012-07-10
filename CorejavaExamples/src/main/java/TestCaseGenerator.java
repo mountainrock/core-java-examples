@@ -1,4 +1,4 @@
-package tools.junit;
+package coacs.tools.junit;
 
 import japa.parser.ast.BlockComment;
 import japa.parser.ast.CompilationUnit;
@@ -103,11 +103,15 @@ import org.apache.commons.lang.StringUtils;
  */
 public class TestCaseGenerator {
 
+	private static final String CLASS_TYPE_DECIMAL = "(Double|Float|double|float)+.*";
+
+	private static final String CLASS_TYPE_NUMERIC = "(lont|short|int|bye|Long|Short|Integer|Byte)+.*";
+
 	private static final String TAB = "\t";
 
 	Map<String, String> memberVariables = new HashMap<String, String>();
 
-	StringBuilder testMethodGiven, testMethodReplay, testMethodWhen, testMethodThen;
+	StringBuilder testMethodGiven, testMethodReplay, testMethodWhen, testMethodThen, testMethodReturn;
 	StringBuilder testClass = null;
 	Map<String, Map<String, String>> testCases = new LinkedHashMap<String, Map<String, String>>();
 
@@ -121,6 +125,10 @@ public class TestCaseGenerator {
 		final TestCaseGenerator testCaseGenerator = new TestCaseGenerator();
 		// testCaseGenerator.generateTestCases();
 		testCaseGenerator.visitAClassAtPath(javaSrcFile);
+	}
+
+	public Map<String, Map<String, String>> getTestCases() {
+		return testCases;
 	}
 
 	public void generateTestCases() throws Exception {
@@ -147,8 +155,12 @@ public class TestCaseGenerator {
 		}
 	}
 
-	public void visitAClassAtPath(final String classFilePath) throws Exception {
-		visitAClass(new File(classFilePath));
+	public void visitAClassAtPath(final String classFilePath) {
+		try {
+			visitAClass(new File(classFilePath));
+		} catch (final Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	public void visitAClass(final File classFile) throws Exception {
@@ -177,13 +189,11 @@ public class TestCaseGenerator {
 			final String replay = codeBlocks.get("Replay");
 			final String when = codeBlocks.get("When");
 			final String then = codeBlocks.get("Then");
+			final String returnS = codeBlocks.get("Return");
 			String replayStr = "";
 
 			if (replay.length() > 0) {
 				replayStr = TAB + String.format("EasyMock.replay(%s);", replay.substring(0, replay.lastIndexOf(","))) + NL;
-			}
-			if (StringUtils.isEmpty(given)) {
-				continue;
 			}
 			testClass.append(NL + "@Test" + NL).append("public void test" + StringUtils.capitalise(key).substring(0, key.lastIndexOf("(")) + "(){" + NL).append(TAB + "//given" + NL).append(given).append(replayStr)
 					.append(NL + TAB + "//when" + NL).append(when).append(NL + TAB + "" + testInstance + "." + key + ";" + NL).append(NL + TAB + "//then" + NL + NL).append(then).append("}");
@@ -201,9 +211,9 @@ public class TestCaseGenerator {
 				+ NL;
 	}
 
-	public void logi(final Object obj) {
+	public void logi(final Object obj, final Object... params) {
 		if (obj != null)
-			System.out.println(obj.toString());
+			System.out.println(String.format(obj.toString(), params));
 	}
 
 	void processCode(final String source, final Node node) {
@@ -213,16 +223,16 @@ public class TestCaseGenerator {
 			final VariableDeclarator variableDeclarator = field.getVariables().get(0);
 			final String type = field.getType().toString();
 			memberVariables.put(variableDeclarator.getId().getName(), type);
-		}
 
-		if (node instanceof MethodDeclaration) {
+		} else if (node instanceof MethodDeclaration) {
 			final MethodDeclaration codeBlock = (MethodDeclaration) node;
 			logi(getMethodName(codeBlock));
 			final BlockStmt methodBody = codeBlock.getBody();
 			testMethodGiven = new StringBuilder();
 			testMethodWhen = new StringBuilder();
-			testMethodThen = new StringBuilder();
+			testMethodThen = new StringBuilder(format(TAB+" //Assert.assertTrue(result!=null);"+NL));
 			testMethodReplay = new StringBuilder();
+			testMethodReturn = new StringBuilder();
 			try {
 				generateTestCaseForMethod(getMethodName(codeBlock), methodBody, TAB, methodBody);
 			} catch (final Exception e) {
@@ -234,9 +244,11 @@ public class TestCaseGenerator {
 			codeBlocks.put("When", testMethodWhen.toString());
 			codeBlocks.put("Then", testMethodThen.toString());
 			codeBlocks.put("Replay", testMethodReplay.toString());
-
+			codeBlocks.put("Return", testMethodReturn.toString());
 			testCases.put(getMethodName(codeBlock), codeBlocks);
 
+		} else {
+			logi("Unknown %s", node.getClass());
 		}
 
 	}
@@ -251,7 +263,11 @@ public class TestCaseGenerator {
 			if (!StringUtils.isEmpty(params))
 				params = params.substring(0, params.lastIndexOf(","));
 		}
-		return codeBlock.getName() + "(" + params + ")";
+		return format("%s(%s)", codeBlock.getName(), params);
+	}
+
+	private String format(final String str, final Object... params) {
+		return String.format(str, params);
 	}
 
 	public void generateTestCaseForMethod(final String methodName, final BlockStmt body, final String tab, final BlockStmt methodBody) {
@@ -261,7 +277,9 @@ public class TestCaseGenerator {
 																																		// setter
 			return;
 		}
+
 		for (final Statement statement : stmts) {
+			logi("%sProcessing  %s", tab, statement.getClass().getSimpleName());
 			if (statement instanceof ExpressionStmt) {
 				final ExpressionStmt expr = (ExpressionStmt) statement;
 				final Expression expression = expr.getExpression();
@@ -277,11 +295,15 @@ public class TestCaseGenerator {
 					final Expression initExpression = variableDeclarator.getInit();
 					final String initializer = initExpression != null ? initExpression.toString() : "";
 					if (StringUtils.isNotEmpty(initializer)) { // variable value
-						if (initializer.contains("new ")) { // new object
+						if (initExpression instanceof BinaryExpr) {
+							final BinaryExpr bexpr = (BinaryExpr) initExpression;
+							final String testData = getTestDataForBinaryExpression(bexpr, tab, "");
+							testMethodGiven.append(testData);
+
+						} else if (initializer.contains("new ")) { // new object
 							continue;
-							// mockExpression = initializer;
 						} else if (classType.matches("(String|\")")) {
-							mockExpression = "\"test-" + StringUtils.lowerCase(mockVariableName) + "\"";
+							mockExpression = format("\"test-%s\"", StringUtils.lowerCase(mockVariableName));
 						} else if (initializer.contains(".")) {
 							// api call. mock the API call
 							if (initExpression instanceof MethodCallExpr) {
@@ -290,26 +312,25 @@ public class TestCaseGenerator {
 								final String invokerMethodName = methodCaller.getName();
 								String initClassName = memberVariables.get(methodInvokerObject);
 								if (initClassName == null) {
-									initClassName = StringUtils.capitalise(methodInvokerObject);
+									initClassName = StringUtils.capitalize(methodInvokerObject);
 								}
-								mockExpression = "EasyMock.createMock(" + initClassName + ".class)";
-								testMethodGiven.append(tab + initClassName).append(" ").append(methodInvokerObject).append(" = ").append(mockExpression + ";\r\n");
+								mockExpression = format("EasyMock.createMock(%s.class)", initClassName);
+								testMethodGiven.append(tab + initClassName).append(" ").append(methodInvokerObject).append(" = ").append(mockExpression + ";" + NL);
 								// set expectation
 								final List<Expression> args = methodCaller.getArgs();
-								;
 								String mockArgs = "";
 								if (args != null) {
 									for (final Expression expression2 : args) {
 										if (expression2 instanceof NameExpr) {
 											final String param = guessParamClassType(expression2);
-											mockArgs += "EasyMock.isA(" + param + ".class),";
+											mockArgs += format("EasyMock.isA(%s.class)", param);
 										}
 									}
 									if (StringUtils.isNotBlank(mockArgs)) {
 										mockArgs = mockArgs.substring(0, mockArgs.length() - 1);
 										// TODO: set the return value
-										testMethodGiven.append(TAB + String.format("%s %s = new %s();", classType, mockVariableName, classType)).append(";" + NL);
-										testMethodGiven.append(TAB + String.format("EasyMock.expect(%s.%s(%s))", methodInvokerObject, invokerMethodName, mockArgs)).append(").andReturn(" + mockVariableName + ");" + NL);
+										testMethodGiven.append(format("%s %s %s = new %s();", TAB, classType, mockVariableName, classType)).append(";" + NL);
+										testMethodGiven.append(format("%s EasyMock.expect(%s.%s(%s))", TAB, methodInvokerObject, invokerMethodName, mockArgs)).append(").andReturn(" + mockVariableName + ");" + NL);
 									}
 								} else {
 									testMethodGiven.append(TAB + String.format("%s.%s();", methodInvokerObject, invokerMethodName)).append(NL);
@@ -318,10 +339,10 @@ public class TestCaseGenerator {
 								testMethodReplay.append(methodInvokerObject).append(",");
 								continue;
 							}
-						} else if (classType.matches("(lont|short|int|bye|Long|Short|Integer|Byte)+.*")) {
+						} else if (classType.matches(CLASS_TYPE_NUMERIC)) {
 							mockExpression = "1";
-						} else if (classType.matches("(Double|Float|double|float)+.*")) {
-							mockExpression = "1.0";
+						} else if (classType.matches(CLASS_TYPE_DECIMAL)) {
+							mockExpression = "1.0f";
 						} else if (classType.endsWith("Dto") || classType.matches("StringBuilder|StringBuffer")) {
 							mockExpression = " new  " + classType + "()";
 						} else if (classType.matches("(final)+.*")) {
@@ -338,7 +359,7 @@ public class TestCaseGenerator {
 							mockExpression = " false";
 
 						} else {
-							mockExpression = " createMock(" + classType + ".class)";
+							mockExpression = format(" createMock(%s.class)", classType);
 						}
 					}
 
@@ -348,24 +369,45 @@ public class TestCaseGenerator {
 			} else if (statement instanceof TryStmt) {
 				final TryStmt tryBlock = (TryStmt) statement;
 				final BlockStmt tryBlockStmt = tryBlock.getTryBlock();
-				logi(tab + " TRY{");
 				generateTestCaseForMethod(methodName, tryBlockStmt, tab + TAB, methodBody);
-				logi(tab + " /TRY }");
 			} else if (statement instanceof ForeachStmt) {
 				final ForeachStmt forEach = (ForeachStmt) statement;
-				logi(tab + " FOR{" + forEach.getVariable());
 				generateTestCaseForMethod(methodName, (BlockStmt) forEach.getBody(), tab + TAB, methodBody);
-				logi(tab + " /FOR}");
 			} else if (statement instanceof WhileStmt) {
 				final WhileStmt whileStmt = (WhileStmt) statement;
-				logi(tab + " WHILE{" + whileStmt.getCondition());
 				generateTestCaseForMethod(methodName, (BlockStmt) whileStmt.getBody(), tab + TAB, methodBody);
-				logi(tab + " /WHILE}");
+			} else if (statement instanceof ReturnStmt) {
+				final ReturnStmt returnStmt = (ReturnStmt) statement;
+				testMethodReturn.append(StringUtils.substringBetween(returnStmt.toString(), "return", ";")).append(" = ");
+				final Expression expr = returnStmt.getExpr();
+				if (expr instanceof BinaryExpr) {
+					final BinaryExpr bexpr = (BinaryExpr) expr;
+				}
+				logi(tab + "return %s %s", expr, expr.getClass());
 			} else {
 				logi(TAB + statement.getClass() + " : " + statement);
 			}
+			logi("%sFinished %s", tab, statement.getClass().getSimpleName());
 		}
 
+	}
+
+	private String getTestDataForBinaryExpression(final BinaryExpr bexpr, final String tab, final String code) {
+		final Expression left = bexpr.getLeft();
+		final Expression right = bexpr.getRight();
+		String result = code;
+		if (left instanceof NameExpr) {
+			result = result + format("%s int %s = 1;%s", tab, left, NL);
+		} else if (left instanceof BinaryExpr) {
+			return getTestDataForBinaryExpression((BinaryExpr) left, tab, result);
+		}
+		if (right instanceof NameExpr) {
+			result = result + format("%s int %s = 1;%s", tab, right, NL);
+		} else if (right instanceof BinaryExpr) {
+			return getTestDataForBinaryExpression((BinaryExpr) right, tab, result);
+		}
+
+		return result;
 	}
 
 	// TODO: set the type of the argument
