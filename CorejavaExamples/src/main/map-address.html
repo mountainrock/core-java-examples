@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Geocoding service</title>
+    <style>
+      html, body, #map-canvas {
+        height: 100%;
+        margin: 0px;
+        padding: 0px
+      }
+      #panel {
+        position: absolute;
+        top: 5px;
+        left: 50%;
+        margin-left: -180px;
+        z-index: 5;
+        background-color: #fff;
+        padding: 5px;
+        border: 1px solid #999;
+      }
+    </style>
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false"></script>
+    <script>
+var geocoder;
+var map;
+var address_position = 0;
+var timeout = 500;
+var addressLines ;
+var stop=false;
+function initialize() {
+  geocoder = new google.maps.Geocoder();
+  var latlng = new google.maps.LatLng(-34.397, 150.644);
+  var mapOptions = {
+    zoom: 9,
+    center: latlng
+  }
+  map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+}
+
+function codeAddressList() {
+  var addressList = document.getElementById('address').value;
+  addressLines = addressList.split(/\r\n|\r|\n/g);
+  for (var i=0;i<addressLines.length;i++)
+	{
+	line = addressLines[i].split("::");
+	codeAddress(line[0] ,line[1]);
+	}
+}
+function codeAddress(address, titlez) {
+	if(stop){
+	   return;
+	}
+  geocoder.geocode( { 'address': address +', scotland'}, function(results, status) {
+    if (status == google.maps.GeocoderStatus.OK) {
+      map.setCenter(results[0].geometry.location);
+      var marker = new google.maps.Marker({
+          map: map,
+          position: results[0].geometry.location,
+		  title: address+", " + titlez
+      });
+    }  else
+        {
+            if (status == google.maps.GeocoderStatus.OVER_QUERY_LIMIT)
+            {
+                setTimeout(function() { codeAddress(address, titlez); }, (timeout * 3));
+            }
+        }
+        address_position++;
+        if (address_position < addressLines.length)
+        {
+			line = addressLines[address_position].split("::");
+            setTimeout(function() { codeAddress(line[0],line[1]); }, (timeout));
+        }
+  });
+}
+function stopLoading(){
+stop= !stop;
+if(!stop){
+codeAddressList()
+}
+
+}
+google.maps.event.addDomListener(window, 'load', initialize);
+
+    </script>
+  </head>
+  <body>
+Note: enter address::details in textbox and click geocode. 
+
+    <div id="panel1">
+      <textarea id="address" rows="10" cols="50">Enter all addresses Line separated in format <address> :: <details> :: price
+  </textarea>  
+      <input type="button" value="Geocode" onclick="codeAddressList()"> <input type="button" value="Stop/Start" onclick="stopLoading()">
+	  
+    </div>
+    <div id="map-canvas"></div>
+  </body>
+</html>
+
