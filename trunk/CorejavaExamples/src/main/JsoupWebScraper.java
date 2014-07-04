@@ -14,12 +14,12 @@ import org.jsoup.select.Elements;
  */
 public class JsoupWebScraper {
 	private static final String NEXT = "Next";
-	static String host = "http://www.indiabix.com";
+	static String host = "http://--";
 	static String path = "/technical/core-java/";
 
 	public static void main(String[] args) throws Exception {
 
-		System.setProperty("http.proxyHost", "emeaproxy.jpmchase.net");
+		System.setProperty("http.proxyHost", "--");
 		System.setProperty("http.proxyPort", "8080");
 
 		String url = host + path;
